@@ -36,6 +36,10 @@ class CensusSeries(Series):
     def census_title(self):
         return self.schema['title']
 
+    @property
+    def col_position(self):
+        return self.schema['position']
+
 
     def __init__(self, data=None, index=None, dtype=None, name=None, copy=False, fastpath=False):
         super(CensusSeries, self).__init__(data, index, dtype, name, copy, fastpath)
@@ -49,8 +53,16 @@ class CensusSeries(Series):
             return self.parent_frame[self.census_code+'_m90'].astype('float')
 
     @property
+    def estimate(self):
+        """Return the estimate value, for either an estimate column or a margin column. """
+        if self.census_code.endswith('_m90'):
+            return self.parent_frame[self.census_code.replace('_m90','')].astype('float')
+        else:
+            return self
+
+    @property
     def value(self):
-        """Return the float value for an error column"""
+        """Synonym for estimate()"""
         if self.census_code.endswith('_m90'):
             return self.parent_frame[self.census_code.replace('_m90','')].astype('float')
         else:

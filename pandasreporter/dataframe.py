@@ -46,6 +46,7 @@ def get_dataframe(table_id, summary_level,geoid):
             'name': 'geoid',
             'code': 'geoid',
             'title': 'geoid',
+            'code_title': 'geoid',
             'indent': 0,
             'index': '   ', # Index in census table
             'position': 0 # Index in dataframe
@@ -53,6 +54,7 @@ def get_dataframe(table_id, summary_level,geoid):
             'name': 'name',
             'code': 'name',
             'title': 'name',
+            'code_title': 'name',
             'indent': 0,
             'index': '   ',
             'position': 1
@@ -81,6 +83,7 @@ def get_dataframe(table_id, summary_level,geoid):
             'name': name,
             'title': ' '.join(title_stack),
             'code': column,
+            'code_title': column+" "+' '.join(title_stack),
             'indent': indent,
             'index': index,
             'position': len(columns)})
@@ -89,6 +92,7 @@ def get_dataframe(table_id, summary_level,geoid):
             'name': "Margins for " + name,
             'title': "Margins for " + ' '.join(title_stack),
             'code': column+"_m90",
+            'code_title': "Margins for "+column + " " + ' '.join(title_stack),
             'indent': indent,
             'index': index,
             'position': len(columns)
@@ -150,6 +154,13 @@ class CensusDataFrame(pd.DataFrame):
                            columns=dict(zip(self.columns, [c['code'] for c in self.schema])),
                            inplace=False)
 
+    @property
+    def ct_columns(self):
+        """Return a copy that uses codes and titles for column headings"""
+        return self.rename(index=str,
+                           columns=dict(zip(self.columns, [c['code_title'] for c in self.schema])),
+                           inplace=False)
+
     def lookup_schema(self, key):
         """Return a colum either by it's actuall column name, or it's position in the census table,
         the last three digits of the column code"""
@@ -195,24 +206,20 @@ class CensusDataFrame(pd.DataFrame):
     def sum_m(self, *cols):
         """Sum a set of Dataframe series and return the summed series and margin. The series must have names"""
 
-        # See the ACS General Handbook, Appendix A, "Calculating MOEs for
-        # Derived Proportions". (https://www.census.gov/content/dam/Census/library/publications/2008/acs/ACSGeneralHandbook.pdf)
+        # See the ACS General Handbook, Appendix A, "Calculating Margins of Error for Derived Estimates".
+        # (https://www.census.gov/content/dam/Census/library/publications/2008/acs/ACSGeneralHandbook.pdf)
         # for a guide to these calculations.
-
-        # This is for the case when the numerator is a subset of the denominator
-
-        # Convert string column names to columns.
 
         if len(cols) == 1 and isinstance(cols[0], (list, tuple)):
             cols = cols[0]
 
         cols = [ self.lookup(c) for c in cols]
 
-        value = sum(cols)
+        estimates = sum(cols)
 
-        m = np.sqrt(sum(c.m90()*c.m90() for c in cols))
+        margins = np.sqrt(sum(c.m90()*c.m90() for c in cols))
 
-        return value, m
+        return estimates, margins
 
     def add_sum_m(self, col_name, *cols):
         """
@@ -240,53 +247,82 @@ class CensusDataFrame(pd.DataFrame):
         for cn in col_name:
             self[cn + '_rse'] = self[cn].rse()
 
-    def sum_col_group(self, header, last):
+    def sum_col_range(self, first, last):
         """Sum a contiguous group of columns, and return the sum and the new margins.  """
 
-        cols = [self.lookup(i) for i in range(header, last+1)]
+        c1 = self.lookup(first)
+        c2 = self.lookup(last)
 
-        value = sum(cols)
+        cols = self.ix[:,c1.col_position:c2.col_position+1]
 
-        m = np.sqrt(np.sum(c.m90()**2 for c in cols))
+        estimates = sum(cols)
 
-        return value, m
+        margins = np.sqrt(np.sum(c.m90()**2 for c in cols))
 
-    def ratio(self, n, d, subset=True):
+        return estimates, margins
+
+    def ratio(self, n, d):
+        """
+        Calculate a proportion. The numerator should not be a subset of the denominator,
+        such as the ratio of males to females. If it is  a subset, use proportion().
+
+        :param n: The Numerator, a string, CensusSeries or tuple
+        :param d: The Denominator, a string, CensusSeries or tuple
+        :return: a tuple of series, the estimates and the margins
+        """
+
+        return self._ratio(n,d,subset = False)
+
+    def proportion(self, n, d):
+        """
+        Calculate a proportion. The numerator must be a subset of the denominator,  such
+        as the proportion of females to the total population. If it is not a subset, use ratio().
+
+        :param n: The Numerator, a string, CensusSeries or tuple
+        :param d: The Denominator, a string, CensusSeries or tuple
+        :return: a tuple of series, the estimates and the margins
+        """
+
+        return self._ratio(n, d, subset=True)
+
+    def _ratio(self, n, d, subset=True):
         """
         Compute a ratio of a numerator and denominator, propagating errors
 
         Both arguments may be one of:
-        * A Series, which must hav a .name property for a column in the dataset
-        * A column name
-        * A tuple of two of either of the above.
+        * A CensusSeries for the estimate
+        * a string that can be resolved to a colum with .lookup()
+        * A tuple of names that resolve with .lookup()
 
-        In the tuple form, the first entry is the value and the second is the 90% margin
+        In the tuple form, the first entry is the estimate and the second is the 90% margin
 
-        :param n: A series or tuple(Series, Series)
-        :param d: A series or tuple(Series, Series)
-        :return: Tuple(Series, Series)
+        :param n: The Numerator, a string, CensusSeries or tuple
+        :param d: The Denominator, a string, CensusSeries or tuple
+        :return: a tuple of series, the estimates and the margins
         """
 
         from .series import CensusSeries
 
         def normalize(x):
-            if isinstance(x, tuple):
-                x, m90 = self.lookup(x[0]), self.lookup(x[1])
-            elif isinstance(x, six.string_types):
-                x = self.lookup(x)
-                m90 = x.m90()
-            elif isinstance(x, CensusSeries):
-                m90 = x.m90()
-            elif isinstance(x, int):
-                x = self.lookup(x)
-                m90 = x.m90()
+            """Convert any of the numerator and denominator forms into a consisten
+            tuple form"""
 
-            return x, m90
+            if isinstance(x, tuple):
+                return self.lookup(x[0]), self.lookup(x[1])
+
+            elif isinstance(x, six.string_types):
+                return self.lookup(x).value, self.lookup(x).m90
+
+            elif isinstance(x, CensusSeries):
+                return x.value, x.m90
+
+            else:
+                raise ValueError("Don't know what to do with a {}".format(type(x)))
 
         n, n_m90 = normalize(n)
         d, d_m90 = normalize(d)
 
-        rate = np.round(n / d, 3)
+        rate = np.round(n / d, 3) # Why are we rounding?
 
         if subset:
             try:
