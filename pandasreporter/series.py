@@ -77,7 +77,7 @@ class CensusSeries(Series):
     def rse(self):
         """Return the relative standard error for a column"""
 
-        return self.se / self.value() * 100
+        return self.se / self.value * 100
 
     @property
     def m95(self):

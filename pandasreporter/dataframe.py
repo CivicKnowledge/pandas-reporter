@@ -21,20 +21,14 @@ def get_dataframe(table_id, summary_level,geoid):
     import json
     from itertools import repeat
 
-    if False:
+    data = requests.get("http://api.censusreporter.org/1.0/data/show/latest"
+                    "?table_ids={table_id}&geo_ids={sl}|{geoid}"
+                    .format(table_id=table_id, sl=summary_level, geoid=geoid)).json()
 
 
-        data = requests.get("http://api.censusreporter.org/1.0/data/show/latest"
-                        "?table_ids={table_id}&geo_ids={sl}|{geoid}"
-                        .format(table_id=table_id, sl=summary_level, geoid=geoid)).json()
+    with open('/tmp/data.json', 'w') as f:
+        f.write(json.dumps(data, indent=4))
 
-
-        with open('/tmp/data.json', 'w') as f:
-            f.write(json.dumps(data, indent=4))
-
-    else:
-        with open('/tmp/data.json', ) as f:
-            data = json.loads(f.read())
 
 
     # It looks like the JSON dicts may be properly sorted, but I'm not sure I can rely on that.
@@ -143,6 +137,9 @@ class CensusDataFrame(pd.DataFrame):
     @property
     def titled_columns(self):
         """Return a copy that uses titles for column headings"""
+        if not self.schema:
+            return self
+
         return self.rename(index=str,
                            columns = dict(zip(self.columns, [c['title'] for c in self.schema])),
                            inplace=False)
@@ -150,6 +147,9 @@ class CensusDataFrame(pd.DataFrame):
     @property
     def coded_columns(self):
         """Return a copy that uses codes for column headings"""
+        if not self.schema:
+            return self
+
         return self.rename(index=str,
                            columns=dict(zip(self.columns, [c['code'] for c in self.schema])),
                            inplace=False)
@@ -157,6 +157,10 @@ class CensusDataFrame(pd.DataFrame):
     @property
     def ct_columns(self):
         """Return a copy that uses codes and titles for column headings"""
+
+        if not self.schema:
+            return self
+
         return self.rename(index=str,
                            columns=dict(zip(self.columns, [c['code_title'] for c in self.schema])),
                            inplace=False)
@@ -165,10 +169,25 @@ class CensusDataFrame(pd.DataFrame):
         """Return a colum either by it's actuall column name, or it's position in the census table,
         the last three digits of the column code"""
 
-        for c in self.schema:
-            if (key == c['name'] or key == c['code'] or key == c['title'] or
-                        key == c['index'] or key == c['position']):
-                return c
+        if self.schema:
+            for c in self.schema:
+                if (key == c['name'] or key == c['code'] or key == c['title'] or
+                            key == c['index'] or key == c['position']):
+                    return c
+        else:
+            for i, c in enumerate(self.columns):
+                if (key == c):
+                    return {
+                        'name': c,
+                        'title': c,
+                        'code': c,
+                        'code_title': c,
+                        'indent': 0,
+                        'index': str(i).zfill(3),
+                        'position': i
+                    }
+
+
 
         return None
 
@@ -217,7 +236,7 @@ class CensusDataFrame(pd.DataFrame):
 
         estimates = sum(cols)
 
-        margins = np.sqrt(sum(c.m90()*c.m90() for c in cols))
+        margins = np.sqrt(sum(c.m90*c.m90 for c in cols))
 
         return estimates, margins
 
@@ -245,7 +264,7 @@ class CensusDataFrame(pd.DataFrame):
         """
 
         for cn in col_name:
-            self[cn + '_rse'] = self[cn].rse()
+            self[cn + '_rse'] = self[cn].rse
 
     def sum_col_range(self, first, last):
         """Sum a contiguous group of columns, and return the sum and the new margins.  """
@@ -257,7 +276,7 @@ class CensusDataFrame(pd.DataFrame):
 
         estimates = sum(cols)
 
-        margins = np.sqrt(np.sum(c.m90()**2 for c in cols))
+        margins = np.sqrt(np.sum(c.m90**2 for c in cols))
 
         return estimates, margins
 
@@ -278,12 +297,30 @@ class CensusDataFrame(pd.DataFrame):
         Calculate a proportion. The numerator must be a subset of the denominator,  such
         as the proportion of females to the total population. If it is not a subset, use ratio().
 
+        ( I think "subset" mostly means that the numerator < denominator )
+
         :param n: The Numerator, a string, CensusSeries or tuple
         :param d: The Denominator, a string, CensusSeries or tuple
         :return: a tuple of series, the estimates and the margins
         """
 
         return self._ratio(n, d, subset=True)
+
+    def normalize(self, x):
+        """Convert any of the numerator and denominator forms into a consisten
+        tuple form"""
+
+        if isinstance(x, tuple):
+            return self.lookup(x[0]), self.lookup(x[1])
+
+        elif isinstance(x, six.string_types):
+            return self.lookup(x).value, self.lookup(x).m90
+
+        elif isinstance(x, CensusSeries):
+            return x.value, x.m90
+
+        else:
+            raise ValueError("Don't know what to do with a {}".format(type(x)))
 
     def _ratio(self, n, d, subset=True):
         """
@@ -301,50 +338,47 @@ class CensusDataFrame(pd.DataFrame):
         :return: a tuple of series, the estimates and the margins
         """
 
-        from .series import CensusSeries
+        n, n_m90 = self.normalize(n)
+        d, d_m90 = self.normalize(d)
 
-        def normalize(x):
-            """Convert any of the numerator and denominator forms into a consisten
-            tuple form"""
-
-            if isinstance(x, tuple):
-                return self.lookup(x[0]), self.lookup(x[1])
-
-            elif isinstance(x, six.string_types):
-                return self.lookup(x).value, self.lookup(x).m90
-
-            elif isinstance(x, CensusSeries):
-                return x.value, x.m90
-
-            else:
-                raise ValueError("Don't know what to do with a {}".format(type(x)))
-
-        n, n_m90 = normalize(n)
-        d, d_m90 = normalize(d)
-
-        rate = np.round(n / d, 3) # Why are we rounding?
+        rate = n.astype(float) / d.astype(float)
 
         if subset:
             try:
                 # From external_documentation.acs_handbook, Appendix A, "Calculating MOEs for
                 # Derived Proportions". This is for the case when the numerator is a subset of the
                 # denominator
+
                 rate_m = np.sqrt(n_m90 ** 2 - ((rate ** 2) * (d_m90 ** 2))) / d
 
             except ValueError:
-                # In the case, of a neg arg to a square root, the acs_handbook recommends using the
+                # In the case of a neg arg to a square root, the acs_handbook recommends using the
                 # method for "Calculating MOEs for Derived Ratios", where the numerator
                 # is not a subset of the denominator. Since our numerator is a subset, the
                 # handbook says " use the formula for derived ratios in the next section which
                 # will provide a conservative estimate of the MOE."
                 # The handbook says this case should be rare, but for this calculation, it
                 # happens about 50% of the time.
-                rate_m = np.sqrt(n_m90 ** 2 + ((rate ** 2) * (d_m90 ** 2))) / d
+
+                return self._ratio(n, d, False)
+
 
         else:
             rate_m = np.sqrt(n_m90 ** 2 + ((rate ** 2) * (d_m90 ** 2))) / d
 
         return rate, rate_m
+
+    def product(self, a, b):
+
+        a, a_m90 = self.normalize(a)
+        b, b_m90 = self.normalize(b)
+
+        p = a * b
+
+        margin = np.sqrt(a**2 *  b_m90**2 + b**2 * a_m90**2)
+
+        return p, margin
+
 
     def dim_columns(self, pred):
         """
