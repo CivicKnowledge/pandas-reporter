@@ -176,7 +176,7 @@ class CensusDataFrame(pd.DataFrame):
                     return c
         else:
             for i, c in enumerate(self.columns):
-                if (key == c):
+                if key == c:
                     return {
                         'name': c,
                         'title': c,
@@ -188,8 +188,7 @@ class CensusDataFrame(pd.DataFrame):
                     }
 
 
-
-        return None
+        raise KeyError("did not find key {}".format(key))
 
     def _getitem_column(self, key):
 
