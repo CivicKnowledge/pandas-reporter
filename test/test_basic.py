@@ -140,10 +140,20 @@ class BasicTests(unittest.TestCase):
         df = pr.CensusDataFrame(pd.read_csv(test_data('ratio.csv')))
         df['ratio'], df['ratio_m90'] = df.ratio('a', 'b')
 
-        # THe handbook has .7200 and 0.2135, but the rounding error in
+        # The handbook has .7200 and 0.2135, but the rounding error in
         # calculating with .7200 gives them 0.2135 instead of 0.2136
         self.assertAlmostEqual(.719565, df.ix[0, 'ratio'], places=4)
         self.assertAlmostEqual(0.213545, df.ix[0, 'ratio_m90'], places=4)
+
+        # Product, Table 4, Page a-16
+
+        df = pr.CensusDataFrame(pd.read_csv(test_data('product.csv')))
+        df['product'], df['product_m90'] = df.product('a', 'b')
+
+        # The handbook has .7200 and 0.2135, but the rounding error in
+        # calculating with .7200 gives them 0.2135 instead of 0.2136
+        self.assertAlmostEqual(6784, df.ix[0, 'product'], places=0)
+        self.assertAlmostEqual(1405, df.ix[0, 'product_m90'], places=0)
 
 if __name__ == '__main__':
     unittest.main()
