@@ -89,3 +89,12 @@ class CensusSeries(Series):
         """Return a standard error series, computed from the 90% margins"""
         return self.se * 2.575
 
+    def sum_m90(self, *cols):
+        """"""
+
+        # See the ACS General Handbook, Appendix A, "Calculating Margins of Error for Derived Estimates".
+        # (https://www.census.gov/content/dam/Census/library/publications/2008/acs/ACSGeneralHandbook.pdf)
+        # for a guide to these calculations.
+
+        return np.sqrt(sum(self.m90 ** 2))
+

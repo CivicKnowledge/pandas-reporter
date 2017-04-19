@@ -49,6 +49,7 @@ setup(
     long_description=readme,
     packages=find_packages(),
     install_requires=[
+        'fs >= 2',
         'pandas',
         'requests',
         'geoid'],

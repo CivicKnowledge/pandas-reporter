@@ -36,14 +36,15 @@ class BasicTests(unittest.TestCase):
                 'index': '   ',  # Index in census table
                 'position': 0  # Index in dataframe
             }, {
-                'name': 'name',
-                'code': 'name',
-                'title': 'name',
-                'code_title': 'name',
+                'name': 'group',
+                'code': 'group',
+                'title': 'group',
+                'code_title': 'group',
                 'indent': 0,
                 'index': '   ',
                 'position': 1
             }
+
         ]
 
         for i in range(4):
@@ -57,10 +58,10 @@ class BasicTests(unittest.TestCase):
                 'position': len(columns)})
 
             columns.append({
-                'name': "col" + str(i),
-                'title': "col" + str(i),
+                'name': "col" + str(i) + "_m90",
+                'title': "Margins for col" + str(i),
                 'code': "col" + str(i) + "_m90",
-                'code_title': str(i),
+                'code_title': "Margins for col" + str(i),
                 'indent': 0,
                 'index': i,
                 'position': len(columns)
@@ -68,7 +69,7 @@ class BasicTests(unittest.TestCase):
 
         rows = []
         for i in range(1,11):
-            row = [str(i), str(i)]
+            row = [str(i), str(i%3)]
             for j in range(1,5):
                 row.append(i*j)
                 row.append(7*i/(3*j))
@@ -89,12 +90,11 @@ class BasicTests(unittest.TestCase):
         odf['r'], odf['r_m90'] = df.ratio('col0', 'col1')
         odf['p'],odf['p_m90'] = df.proportion('col0', 'col1')
         odf['s1'], odf['s1_m90'] = df.sum_m('col0','col1')
-
         odf['m'], odf['m_m90'] = df.product('col0', 'col1')
 
         odf.add_rse('s1')
 
-        print(odf)
+        #print(odf)
 
         self.assertAlmostEquals(52.8621, odf.s1_rse.mean(), places=4)
         self.assertAlmostEqual(14.3481, odf.s1_m90.mean(), places=4)
@@ -114,6 +114,21 @@ class BasicTests(unittest.TestCase):
         r = df.col0 / df.col1
         moe = np.sqrt(df.col0_m90 ** 2 + (r ** 2 * df.col1_m90 ** 2)) / df.col1
         self.assertEquals(list(moe), list(odf['r_m90']))
+
+    def test_basic_math_inv(self):
+        """Just check that there are no runtime warnings"""
+        pd.set_option('display.width', 120)
+        pd.set_option('display.precision', 3)
+        df = self.make_df()
+
+        odf = pr.CensusDataFrame()
+
+        odf['col0'], odf['col0_m90'] = df['col0'], df['col0_m90']
+        odf['col1'], odf['col1_m90'] = df['col1'], df['col1_m90']
+
+        # Inverting the numerator and denom of the previous
+        #odf['ri'], odf['r_m90'] = df.ratio('col1', 'col0')
+        odf['pi'], odf['p_m90'] = df.proportion('col1', 'col0')
 
     def test_math_handbook(self):
         """Test using the examples from the ACS Handbook, using
@@ -154,6 +169,41 @@ class BasicTests(unittest.TestCase):
         # calculating with .7200 gives them 0.2135 instead of 0.2136
         self.assertAlmostEqual(6784, df.ix[0, 'product'], places=0)
         self.assertAlmostEqual(1405, df.ix[0, 'product_m90'], places=0)
+
+
+    def test_array_index(self):
+        """Test that array indexing brings along margin columns"""
+        pd.set_option('display.width', 120)
+        pd.set_option('display.precision', 3)
+        df = self.make_df()
+
+        df2 = df[['geoid','col0', 'col1']]
+
+        columns = list(df2.columns)
+
+        self.assertEquals(['geoid', 'col0', 'col0_m90', 'col1', 'col1_m90'], columns)
+
+        # But not if it is re-cast to a normal Dataframe.
+        df3 = pd.DataFrame(df)
+
+        df4 = df3[['geoid', 'col0', 'col1']]
+
+        columns = list(df4.columns)
+
+        self.assertEquals(['geoid', 'col0', 'col1'], columns)
+
+    def test_row_agg(self):
+
+        from pandasreporter.func import  sum_rs
+        pd.set_option('display.width', 120)
+
+        df = self.make_df()
+
+        # Don't really know how to determine the correct values ....
+        # so ... faith ...
+        print(df.groupby('group').sum())
+
+        print(df.groupby('group').mean())
 
 if __name__ == '__main__':
     unittest.main()

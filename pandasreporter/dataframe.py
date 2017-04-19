@@ -9,31 +9,38 @@ import pandas as pd
 import numpy as np
 import requests
 from operator import itemgetter
+from .util import get_cache, slugify
 
-def get_dataframe(table_id, summary_level,geoid):
+def get_dataframe(table_id, summary_level,geoid, cache=True):
     """
 
     :param table_id: Census table id, ex: 'B01001'
     :param summary_level: A summary level number or string, ex: 140
     :param geoid: Geoid of the containing region. ex '05000US06073' for San Diego county
+    :param cache: If true, cache the response from Census Reporter ( Fast and Friendly! )
     :return:
     """
     import json
     from itertools import repeat
 
-    data = requests.get("http://api.censusreporter.org/1.0/data/show/latest"
-                    "?table_ids={table_id}&geo_ids={sl}|{geoid}"
-                    .format(table_id=table_id, sl=summary_level, geoid=geoid)).json()
+    cache_fs = get_cache()
+
+    url = "http://api.censusreporter.org/1.0/data/show/latest?table_ids={table_id}&geo_ids={sl}|{geoid}"\
+            .format(table_id=table_id, sl=summary_level, geoid=geoid)
+
+    cache_key = slugify(url)
 
 
-    with open('/tmp/data.json', 'w') as f:
-        f.write(json.dumps(data, indent=4))
+    if cache and cache_fs.exists(cache_key):
+        data = json.loads(cache_fs.gettext(cache_key))
+    else:
+        data = requests.get(url).json()
 
-
+        if cache:
+            cache_fs.settext(cache_key, json.dumps(data, indent=4))
 
     # It looks like the JSON dicts may be properly sorted, but I'm not sure I can rely on that.
     # So, sort the column id values, then make a columns title list in the same order
-
 
     columns = [
         {
@@ -124,15 +131,6 @@ class CensusDataFrame(pd.DataFrame):
 
         super(CensusDataFrame, self).__init__(data, index, columns, dtype, copy)
 
-    @property
-    def _constructor(self):
-        return CensusDataFrame
-
-
-    @property
-    def _constructor_sliced(self):
-        from .series import CensusSeries
-        return CensusSeries
 
     @property
     def titled_columns(self):
@@ -190,18 +188,9 @@ class CensusDataFrame(pd.DataFrame):
 
         raise KeyError("did not find key {}".format(key))
 
-    def _getitem_column(self, key):
-
-        schema = self.lookup_schema(key)
-
-        c = super(CensusDataFrame, self)._getitem_column(self.columns[schema['position']])
-        c.parent_frame = self
-        c.schema = schema
-
-        return c
 
     def lookup(self, key):
-        """Return a colum either by it's actuall column name, or it's position in the census table,
+        """Return a column either by it's actuall column name, or it's position in the census table,
         the last three digits of the column code"""
 
         schema = self.lookup_schema(key)
@@ -235,7 +224,7 @@ class CensusDataFrame(pd.DataFrame):
 
         estimates = sum(cols)
 
-        margins = np.sqrt(sum(c.m90*c.m90 for c in cols))
+        margins = np.sqrt(sum(c.m90**2 for c in cols))
 
         return estimates, margins
 
@@ -348,9 +337,6 @@ class CensusDataFrame(pd.DataFrame):
                 # Derived Proportions". This is for the case when the numerator is a subset of the
                 # denominator
 
-                rate_m = np.sqrt(n_m90 ** 2 - ((rate ** 2) * (d_m90 ** 2))) / d
-
-            except ValueError:
                 # In the case of a neg arg to a square root, the acs_handbook recommends using the
                 # method for "Calculating MOEs for Derived Ratios", where the numerator
                 # is not a subset of the denominator. Since our numerator is a subset, the
@@ -358,6 +344,19 @@ class CensusDataFrame(pd.DataFrame):
                 # will provide a conservative estimate of the MOE."
                 # The handbook says this case should be rare, but for this calculation, it
                 # happens about 50% of the time.
+
+                # Normal calc, from the handbook
+                sqr = n_m90 ** 2 - ((rate ** 2) * (d_m90 ** 2))
+
+                # When the sqr value is < 0, the sqrt will fail, so use the other calc in those cases
+                sqrn = sqr.where(sqr > 0, n_m90 ** 2 + ((rate ** 2) * (d_m90 ** 2)) )
+
+                # Aw, hell, just punt.
+                sqrnz = sqrn.where(sqrn > 0, float('nan'))
+
+                rate_m = np.sqrt(sqrnz) / d
+
+            except ValueError:
 
                 return self._ratio(n, d, False)
 
@@ -446,3 +445,71 @@ class CensusDataFrame(pd.DataFrame):
         r.schema = self.schema
 
         return r
+
+    def groupby(self, by=None, axis=0, level=None, as_index=True, sort=True,
+                group_keys=True, squeeze=False, **kwargs):
+        """
+        Overrides groupby() to return CensusDataFrameGroupBy
+
+        """
+        from .groupby import groupby
+
+        if level is None and by is None:
+            raise TypeError("You have to supply one of 'by' and 'level'")
+        axis = self._get_axis_number(axis)
+
+        return groupby(self, by=by, axis=axis, level=level, as_index=as_index,
+                       sort=sort, group_keys=group_keys, squeeze=squeeze,
+                       **kwargs)
+
+    ##
+    ## Extension Points
+    ##
+
+    @property
+    def _constructor(self):
+        return CensusDataFrame
+
+    @property
+    def _constructor_sliced(self):
+        from .series import CensusSeries
+        return CensusSeries
+
+    def _getitem_column(self, key):
+        """ Return a column from a name
+
+        :param key:
+        :return:
+        """
+        schema = self.lookup_schema(key)
+
+        c = super(CensusDataFrame, self)._getitem_column(self.columns[schema['position']])
+        c.parent_frame = self
+        c.schema = schema
+
+        return c
+
+    def _getitem_array(self, key):
+        """Return a set of columns"""
+
+        if isinstance(key, list):
+
+            augmented_key = []
+
+            for col_name in key:
+                augmented_key.append(col_name)
+
+                m90 = col_name+'_m90'
+
+                try:
+                    self.lookup(m90)
+                    augmented_key.append(m90)
+                except KeyError:
+                    pass
+
+            return super()._getitem_array(augmented_key)
+        else:
+            return super()._getitem_array(key)
+
+
+
