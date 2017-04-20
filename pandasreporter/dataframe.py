@@ -64,6 +64,9 @@ def get_dataframe(table_id, summary_level,geoid, cache=True):
 
     title_stack = []
 
+    if not 'tables' in data:
+        print(json.dumps(data, indent=4))
+
     column_codes = sorted(data['tables'][table_id]['columns'].keys())
 
     for column in column_codes:
@@ -163,14 +166,33 @@ class CensusDataFrame(pd.DataFrame):
                            columns=dict(zip(self.columns, [c['code_title'] for c in self.schema])),
                            inplace=False)
 
+    def search_columns(self, *args):
+        """Return full titles for columns that contain one of the strings in the arguments
+
+        :param *args: String arguments, or compiled regular expressions
+
+
+        """
+
+        import re
+
+        return [e for e in list(self.columns) if
+                any( a.search(e) if isinstance(a, re._pattern_type) else  a in str(e) for a in args) ]
+
+
     def lookup_schema(self, key):
-        """Return a colum either by it's actuall column name, or it's position in the census table,
+        """Return a column either by it's actual column name, or it's position in the census table,
         the last three digits of the column code"""
 
         if self.schema:
             for c in self.schema:
-                if (key == c['name'] or key == c['code'] or key == c['title'] or
-                            key == c['index'] or key == c['position']):
+                if (key == c['name'] or
+                        key.lower() == c['name'].lower() or
+                        key == c['code'] or
+                        key.lower() == c['code'].lower() or
+                        key == c['title'] or
+                        key == c['index'] or
+                        key == c['position']):
                     return c
         else:
             for i, c in enumerate(self.columns):
@@ -186,8 +208,7 @@ class CensusDataFrame(pd.DataFrame):
                     }
 
 
-        raise KeyError("did not find key {}".format(key))
-
+        raise KeyError("did not find key '{}'".format(key))
 
     def lookup(self, key):
         """Return a column either by it's actuall column name, or it's position in the census table,
@@ -426,6 +447,7 @@ class CensusDataFrame(pd.DataFrame):
         from pandas import DataFrame, Series
         from .series import CensusSeries
 
+
         result = super(CensusDataFrame, self).__getitem__(key)
 
         if isinstance(result, DataFrame):
@@ -475,6 +497,14 @@ class CensusDataFrame(pd.DataFrame):
         from .series import CensusSeries
         return CensusSeries
 
+    def _lookup_maybe(self, key):
+        """Return a current column name when given one of the alternate names listed in the schema. """
+        try:
+            s = self.lookup_schema(key)
+            return list(self.columns)[s['position']]
+        except KeyError:
+            return key
+
     def _getitem_column(self, key):
         """ Return a column from a name
 
@@ -497,13 +527,11 @@ class CensusDataFrame(pd.DataFrame):
             augmented_key = []
 
             for col_name in key:
-                augmented_key.append(col_name)
-
-                m90 = col_name+'_m90'
+                augmented_key.append(self._lookup_maybe(col_name))
 
                 try:
-                    self.lookup(m90)
-                    augmented_key.append(m90)
+                    s = self.lookup_schema(col_name+'_m90')
+                    augmented_key.append(list(self.columns)[s['position']])
                 except KeyError:
                     pass
 
