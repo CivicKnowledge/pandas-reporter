@@ -6,3 +6,5 @@
 
 from .dataframe import *
 from .series import *
+from .censusapi import *
+from .censusreporter import *

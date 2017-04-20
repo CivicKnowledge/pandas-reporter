@@ -68,3 +68,9 @@ def clean_cache(cache = None, cache_name=CACHE_NAME):
         age = (now - mod).total_seconds()
         if age > (60 * 60 * 4) and details.is_file:
             cache.remove(step[0])
+
+def nl2br(v, is_xhtml= True ):
+    if is_xhtml:
+        return v.replace('\n','<br />\n')
+    else :
+        return v.replace('\n','<br>\n')

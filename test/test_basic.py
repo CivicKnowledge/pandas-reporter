@@ -14,7 +14,7 @@ class BasicTests(unittest.TestCase):
 
     def test_basic(self):
 
-        df = pr.get_dataframe('B01001', '140',  '05000US06073', cache=True)
+        df = pr.get_cr_dataframe('B01001', '140',  '05000US06073', cache=True)
 
         self.assertEquals(37292.0, df.lookup(84).sum())
         self.assertEquals(df.B01001042.sum(), df.lookup('042').sum())
@@ -207,7 +207,7 @@ class BasicTests(unittest.TestCase):
 
     def test_index(self):
 
-        df = pr.get_dataframe('B01001', '140', '05000US06073', cache=True).ct_columns
+        df = pr.get_cr_dataframe('B01001', '140', '05000US06073', cache=True).ct_columns
 
         df2 = df[['geoid','B01001001', 'B01001002']]
 
