@@ -10,7 +10,7 @@ from terminaltables import AsciiTable as TermTable
 from textwrap import fill
 from .util import nl2br
 from collections import UserList, UserDict
-
+from .exceptions import  AccessException
 
 def _cached_get(url, cache=True):
     """Return the results of a GET request, possibly cached.
@@ -25,12 +25,12 @@ def _cached_get(url, cache=True):
     if cache and cache_fs.exists(cache_key):
         data = json.loads(cache_fs.gettext(cache_key))
     else:
-        r = requests.get(url)
         try:
+            r = requests.get(url)
             data = r.json()
+            r.raise_for_status()
         except:
-            print(r.text)
-            raise
+            raise AccessException("ERROR "+r.text)
 
 
         if cache:
@@ -55,7 +55,7 @@ class VariableList(UserList):
         return ['Name Label Concept Type Required'.split()] + \
                [[e.get('name'), e.get('label'), e.get('concept'), e.get('predicateType', ''),
                  e.get('required', '')]
-                for e in self.data]
+                for e in sorted(self.data, key=lambda e: e.get('name'))]
 
     def __str__(self):
 
@@ -288,6 +288,7 @@ class CensusApi(object):
                    dataset.get('title', '') + ' ' + \
                    dataset.get('description', ' ') + \
                    (' '.join(dataset.get('keyword', [])) + ' ' + str(dataset.get('vintage', ' ')))
+
 
             if any(a.search(text.lower()) if isinstance(a, re._pattern_type) else  a.lower() in str(text.lower())
                    for a in args):

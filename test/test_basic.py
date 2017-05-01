@@ -217,5 +217,20 @@ class BasicTests(unittest.TestCase):
 
         print(df3.head())
 
+    def test_varrep(self):
+
+        df = pr.get_varrep_dataframe(2015,  'B01001', '140' , state='11', cache=False) # Washington DC -- the smallest file
+
+        self.assertEqual(8771, len(df))
+
+        self.assertEqual(13, pr.get_ave_weight(11))
+
+        f = pr.get_k_val_f()
+
+        self.assertEqual(4, f(1000))
+        self.assertEqual(10, f(10000))
+        self.assertEqual(18, f(49999))
+        self.assertEqual(22, f(50001))
+
 if __name__ == '__main__':
     unittest.main()
