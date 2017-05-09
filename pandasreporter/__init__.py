@@ -4,6 +4,9 @@
 
 """
 
+
+from ._meta import __version__
+
 from .dataframe import *
 from .series import *
 from .censusapi import *

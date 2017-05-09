@@ -149,6 +149,8 @@ class CensusDataFrame(pd.DataFrame):
 
         self[col_name], self[col_name+'_m90'] = self.sum_m(*cols)
 
+        return self
+
 
     def add_rse(self, *col_name):
         """
@@ -161,6 +163,8 @@ class CensusDataFrame(pd.DataFrame):
 
         for cn in col_name:
             self[cn + '_rse'] = self[cn].rse
+
+        return self
 
     def sum_col_range(self, first, last):
         """Sum a contiguous group of columns, and return the sum and the new margins.  """
@@ -203,7 +207,7 @@ class CensusDataFrame(pd.DataFrame):
         return self._ratio(n, d, subset=True)
 
     def normalize(self, x):
-        """Convert any of the numerator and denominator forms into a consisten
+        """Convert any of the numerator and denominator forms into a consistent
         tuple form"""
 
         if isinstance(x, tuple):
