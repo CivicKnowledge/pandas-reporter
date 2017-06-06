@@ -81,21 +81,20 @@ class CensusDataFrame(pd.DataFrame):
                         key == c['index'] or
                         key == c['position']):
                     return c
-        else:
-            for i, c in enumerate(self.columns):
-                if key == c:
-                    return {
-                        'name': c,
-                        'title': c,
-                        'code': c,
-                        'code_title': c,
-                        'indent': 0,
-                        'index': str(i).zfill(3),
-                        'position': i
-                    }
 
+        for i, c in enumerate(self.columns):
+            if key == c:
+                return {
+                    'name': c,
+                    'title': c,
+                    'code': c,
+                    'code_title': c,
+                    'indent': 0,
+                    'index': str(i).zfill(3),
+                    'position': i
+                }
 
-        raise KeyError("did not find key '{}'".format(key))
+        raise KeyError("did not find key '{}' ".format(key))
 
     def lookup(self, key):
         """Return a column either by it's actuall column name, or it's position in the census table,
@@ -182,7 +181,7 @@ class CensusDataFrame(pd.DataFrame):
 
     def ratio(self, n, d):
         """
-        Calculate a proportion. The numerator should not be a subset of the denominator,
+        Calculate a ratio. The numerator should not be a subset of the denominator,
         such as the ratio of males to females. If it is  a subset, use proportion().
 
         :param n: The Numerator, a string, CensusSeries or tuple
@@ -194,7 +193,7 @@ class CensusDataFrame(pd.DataFrame):
 
     def proportion(self, n, d):
         """
-        Calculate a proportion. The numerator must be a subset of the denominator,  such
+        Calculate a proportion. The numerator should be a subset of the denominator,  such
         as the proportion of females to the total population. If it is not a subset, use ratio().
 
         ( I think "subset" mostly means that the numerator < denominator )
@@ -260,7 +259,7 @@ class CensusDataFrame(pd.DataFrame):
                 # Normal calc, from the handbook
                 sqr = n_m90 ** 2 - ((rate ** 2) * (d_m90 ** 2))
 
-                # When the sqr value is < 0, the sqrt will fail, so use the other calc in those cases
+                # When the sqr value is <= 0, the sqrt will fail, so use the other calc in those cases
                 sqrn = sqr.where(sqr > 0, n_m90 ** 2 + ((rate ** 2) * (d_m90 ** 2)) )
 
                 # Aw, hell, just punt.
