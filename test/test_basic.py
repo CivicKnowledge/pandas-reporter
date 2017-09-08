@@ -232,5 +232,22 @@ class BasicTests(unittest.TestCase):
         self.assertEqual(18, f(49999))
         self.assertEqual(22, f(50001))
 
+    def test_register(self):
+        from rowgenerators import register_proto, RowGenerator, get_cache
+        from pandasreporter import CensusReporterSource
+
+        register_proto('censusreporter', CensusReporterSource)
+
+        url = 'censusreporter:B17001/140/05000US06073'
+
+        gen = RowGenerator(cache=get_cache(), url=url)
+
+        self.assertEquals('B17001', gen.generator.table_id)
+        self.assertEquals('140', gen.generator.summary_level)
+        self.assertEquals('05000US06073', gen.generator.geoid)
+
+        for row in gen:
+            print(row)
+
 if __name__ == '__main__':
     unittest.main()

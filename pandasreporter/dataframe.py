@@ -8,9 +8,14 @@ import six
 import pandas as pd
 import numpy as np
 
+# Enums to indicate which field in the schema is used for column names
+COLUMN_NAMES_CODE = 'code'
+COLUMN_NAMES_TITLE = 'title'
+COLUMN_NAMES_CT = 'code_title'
+
 class CensusDataFrame(pd.DataFrame):
 
-    _metadata = ['schema']
+    _metadata = ['schema', 'release', 'column_names_type'] # Release is the Census Reporter release metadata
 
     def __init__(self, data=None, index=None,  columns=None, dtype=None, copy=False, schema=None):
 
@@ -18,6 +23,8 @@ class CensusDataFrame(pd.DataFrame):
 
         if columns is None and self.schema is not None:
             columns = [c['code'] for c in self.schema]
+
+        self.column_names_type = COLUMN_NAMES_CODE
 
         super(CensusDataFrame, self).__init__(data, index, columns, dtype, copy)
 
@@ -28,9 +35,14 @@ class CensusDataFrame(pd.DataFrame):
         if not self.schema:
             return self
 
-        return self.rename(index=str,
+
+        df =  self.rename(index=str,
                            columns = dict(zip(self.columns, [c['title'] for c in self.schema])),
                            inplace=False)
+
+        df.column_names_type = COLUMN_NAMES_TITLE
+
+        return df
 
     @property
     def coded_columns(self):
@@ -38,9 +50,13 @@ class CensusDataFrame(pd.DataFrame):
         if not self.schema:
             return self
 
-        return self.rename(index=str,
+        df = self.rename(index=str,
                            columns=dict(zip(self.columns, [c['code'] for c in self.schema])),
                            inplace=False)
+
+        df.column_names_type = COLUMN_NAMES_CODE
+
+        return df
 
     @property
     def ct_columns(self):
@@ -49,9 +65,13 @@ class CensusDataFrame(pd.DataFrame):
         if not self.schema:
             return self
 
-        return self.rename(index=str,
+        df = self.rename(index=str,
                            columns=dict(zip(self.columns, [c['code_title'] for c in self.schema])),
                            inplace=False)
+
+        df.column_names_type = COLUMN_NAMES_CT
+
+        return df
 
     def search_columns(self, *args):
         """Return full titles for columns that contain one of the strings in the arguments
@@ -67,37 +87,67 @@ class CensusDataFrame(pd.DataFrame):
                 any( a.search(e) if isinstance(a, re._pattern_type) else  a in str(e) for a in args) ]
 
 
+    def _col_name_match(self, c, key):
+
+        return (key == str(c['name']) or str(key).lower() == str(c['name']).lower() or
+                key == c['code'] or key == str(c['code']).lower() or
+                key == c['title'].lower() or
+                key == str(c['index']).lower() or key == str(c['position']))
+
+    def _default_schema_entry(self, pos, c):
+        """ Return a schema entry for columns that aren't ACS table columns
+
+        :param pos: Position of the column
+        :param c: Column name
+        :return:
+        """
+
+        return {
+            'name': c,
+            'title': c,
+            'code': c,
+            'code_title': c,
+            'indent': 0,
+            'index': None,
+            'position': pos
+        }
+
+    def _regen_schema(self):
+        """Re-generate the schema with only the columns that are actually in this dataframe
+
+        Most importantly, set the 'position' key to the colums new position
+        """
+
+        s = []
+
+        for i, cn in enumerate(self.columns):
+            c = self.lookup_schema(str(cn))
+            c['position'] = i
+            s.append(c)
+
+        return s
+
+    def _rebuild_schema(self):
+        self.schema = self._regen_schema()
+
     def lookup_schema(self, key):
         """Return a column either by it's actual column name, or it's position in the census table,
         the last three digits of the column code"""
 
         if self.schema:
             for c in self.schema:
-                if (key == c['name'] or
-                        key.lower() == c['name'].lower() or
-                        key == c['code'] or
-                        key.lower() == c['code'].lower() or
-                        key == c['title'] or
-                        key == c['index'] or
-                        key == c['position']):
+                if self._col_name_match(c, key):
                     return c
 
         for i, c in enumerate(self.columns):
-            if key == c:
-                return {
-                    'name': c,
-                    'title': c,
-                    'code': c,
-                    'code_title': c,
-                    'indent': 0,
-                    'index': str(i).zfill(3),
-                    'position': i
-                }
+            if key == c or str(key).lower() == c.lower():
+                return self._default_schema_entry(i,c)
+
 
         raise KeyError("did not find key '{}' ".format(key))
 
     def lookup(self, key):
-        """Return a column either by it's actuall column name, or it's position in the census table,
+        """Return a column either by it's actual column name, or it's position in the census table,
         the last three digits of the column code"""
 
         schema = self.lookup_schema(key)
@@ -208,6 +258,8 @@ class CensusDataFrame(pd.DataFrame):
     def normalize(self, x):
         """Convert any of the numerator and denominator forms into a consistent
         tuple form"""
+
+        from .series import CensusSeries
 
         if isinstance(x, tuple):
             return self.lookup(x[0]), self.lookup(x[1])
@@ -358,6 +410,11 @@ class CensusDataFrame(pd.DataFrame):
 
         return r
 
+    def set_index(self, keys, drop=True, append=False, inplace=False, verify_integrity=False):
+        r = super().set_index(keys, drop, append, inplace, verify_integrity)
+        r._rebuild_schema()
+        return r
+
     def groupby(self, by=None, axis=0, level=None, as_index=True, sort=True,
                 group_keys=True, squeeze=False, **kwargs):
         """
@@ -410,10 +467,12 @@ class CensusDataFrame(pd.DataFrame):
         return c
 
     def _getitem_array(self, key):
-        """Return a set of columns"""
+        """Return a set of columns. The keys can be any of the names for the column, the
+        method automatically adds _m90 columns"""
 
         if isinstance(key, list):
 
+            # augmented_key is the original list of columns with the _m90 columns added
             augmented_key = []
 
             for col_name in key:
@@ -425,9 +484,12 @@ class CensusDataFrame(pd.DataFrame):
                 except KeyError:
                     pass
 
-            return super()._getitem_array(augmented_key)
+            df =  super()._getitem_array(augmented_key)
         else:
-            return super()._getitem_array(key)
+            df =  super()._getitem_array(key)
 
 
+        assert id(df) != id(self)
+        df._rebuild_schema()
+        return df
 
