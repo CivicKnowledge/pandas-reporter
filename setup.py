@@ -34,8 +34,6 @@ classifiers = [
     'License :: OSI Approved :: MIT License',
     'Operating System :: OS Independent',
     'Programming Language :: Python',
-    'Programming Language :: Python :: 2.6',
-    'Programming Language :: Python :: 2.7',
     'Programming Language :: Python :: 3.4',
     'Topic :: Software Development :: Debuggers',
     'Topic :: Software Development :: Libraries :: Python Modules',
@@ -57,5 +55,15 @@ setup(
     author_email='eric@civicknowledge.com',
     url='https://github.com/CivicKnowledge/pandas-reporter.git',
     license='MIT',
-    classifiers=classifiers
+    classifiers=classifiers,
+    entry_points={
+        'appurl.urls': [
+            "censusreporter: = pandasreporter.censusreporter:CensusReporterURL"
+        ],
+        'rowgenerators': [
+            "CRJSON+ = pandasreporter.censusreporter:CensusReporterSource"
+
+        ]
+
+    },
 )
