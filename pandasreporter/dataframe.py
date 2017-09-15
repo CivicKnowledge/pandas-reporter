@@ -411,7 +411,9 @@ class CensusDataFrame(pd.DataFrame):
         return r
 
     def set_index(self, keys, drop=True, append=False, inplace=False, verify_integrity=False):
+
         r = super().set_index(keys, drop, append, inplace, verify_integrity)
+        r = self if inplace else r
         r._rebuild_schema()
         return r
 
