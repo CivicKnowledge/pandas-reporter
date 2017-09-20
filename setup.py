@@ -4,16 +4,8 @@
 import os
 import sys
 
-from setuptools import find_packages
-import uuid
-import imp
+from setuptools import find_packages, setup
 
-from pip.req import parse_requirements
-
-try:
-    from setuptools import setup
-except ImportError:
-    from distutils.core import setup
 
 if sys.argv[-1] == 'publish':
     os.system('python setup.py sdist upload')
@@ -21,10 +13,6 @@ if sys.argv[-1] == 'publish':
 
 with open(os.path.join(os.path.dirname(__file__), 'README.rst')) as f:
     readme = f.read()
-
-# Avoiding import so we don't execute __init__.py, which may have imports
-# that aren't installed until after installation.
-_meta = imp.load_source('_meta', 'pandasreporter/_meta.py')
 
 
 classifiers = [
@@ -42,7 +30,7 @@ classifiers = [
 
 setup(
     name='pandasreporter',
-    version=_meta.__version__,
+    version='0.1.0',
     description='Pandas dataframe and series for us with Census Reporter',
     long_description=readme,
     packages=find_packages(),
@@ -51,7 +39,7 @@ setup(
         'pandas',
         'requests',
         'geoid'],
-    author=_meta.__author__,
+    author='Eric Busboom',
     author_email='eric@civicknowledge.com',
     url='https://github.com/CivicKnowledge/pandas-reporter.git',
     license='MIT',
