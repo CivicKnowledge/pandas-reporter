@@ -60,7 +60,7 @@ class CensusReporterURL(WebUrl):
         return self._parts[2]
 
     @classmethod
-    def match(cls, url, **kwargs):
+    def _match(cls, url, **kwargs):
         return url.scheme.startswith('censusreporter')
 
     @property
@@ -93,14 +93,14 @@ class CensusReporterURL(WebUrl):
                              fragment=[join(*self._parts),None],
                              ).as_type(CensusReporterJsonUrl)
 
-    def get_target(self, mode=None):
+    def get_target(self):
         # get_resource returns a CensusReporterJsonUrl so this should never be called
         raise NotImplementedError()
 
-    def join(self, s, scheme_extension=None):
+    def join(self, s):
         raise NotImplementedError()
 
-    def join_dir(self, s, scheme_extension=None):
+    def join_dir(self, s):
         raise NotImplementedError()
 
     def join_target(self, tf):
@@ -119,7 +119,7 @@ class CensusReporterJsonUrl(FileUrl):
     def get_resource(self):
         return self
 
-    def get_target(self, mode=None):
+    def get_target(self):
         return self
 
 
