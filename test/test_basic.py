@@ -1,7 +1,9 @@
 import unittest
-import pandasreporter as pr
-import pandas as pd
+
 import numpy as np
+import pandas as pd
+
+import pandasreporter as pr
 
 
 def test_data(*paths):
@@ -194,7 +196,6 @@ class BasicTests(unittest.TestCase):
 
     def test_row_agg(self):
 
-        from pandasreporter.func import  sum_rs
         pd.set_option('display.width', 120)
 
         df = self.make_df()

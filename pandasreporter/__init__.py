@@ -5,8 +5,9 @@
 """
 
 from .dataframe import *
-from .series import *
+from .varrep import *
+
 from .censusapi import *
 from .censusreporter import *
-from .varrep import *
+
 

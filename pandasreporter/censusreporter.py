@@ -4,15 +4,17 @@
 Return dataframes from the Census Reporter API
 """
 
-import requests
-from operator import itemgetter
-from rowgenerators import Source
-from appurl import WebUrl, FileUrl, parse_app_url, AppUrlError
-from appurl.util import slugify
 import json
+from itertools import repeat
+from operator import itemgetter
 from os.path import dirname, join
 from urllib.parse import unquote
-from itertools import repeat
+
+import requests
+
+from appurl import WebUrl, FileUrl, parse_app_url, AppUrlError
+from rowgenerators import Source
+
 
 class CensusReporterURL(WebUrl):
     """A URL for censusreporter tables.
@@ -153,7 +155,7 @@ class CensusReporterSource(Source):
         :param limit: Limit is ignored
         :return:
         """
-        from .dataframe import CensusDataFrame
+        from publicdata.censusreporter.dataframe import CensusDataFrame
 
         rows, columns, release = self.get_cr_rows()
 
@@ -165,9 +167,9 @@ class CensusReporterSource(Source):
 
     def __iter__(self):
 
-        rows, self.columns, release = self.get_cr_rows()
+        rows, columns, release = self.get_cr_rows()
 
-        yield [e['code'] for e in self.columns]
+        yield [e['code'] for e in columns]
 
         for row in rows:
             yield row
@@ -288,7 +290,6 @@ def make_citation_dict(t):
     :return:
     """
 
-    from nameparser import HumanName
     from datetime import datetime
     from appurl import Url
 

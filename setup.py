@@ -36,12 +36,15 @@ setup(
     packages=find_packages(),
     install_requires=[
         'fs >= 2',
+        'appurl',
+        'rowgenerators'
         'pandas',
         'requests',
-        'geoid'],
+        'geoid'
+    ],
     author='Eric Busboom',
     author_email='eric@civicknowledge.com',
-    url='https://github.com/CivicKnowledge/pandas-reporter.git',
+    url='https://github.com/Metatab/pandas-reporter.git',
     license='MIT',
     classifiers=classifiers,
     entry_points={
